@@ -1,0 +1,58 @@
+#+title: Homelab setup
+
+* Machines
+** Merlin: A VPS hosted on ovh
+*** Yunohost App
+*** Wireguard Configuration
+
+
+** Leodagan: The big tower
+** Perceval: Old laptop turned into nextcloud host
+OS: Ubuntu 24.04
+
+*** Wireguard
+#+begin_src conf :tangle sshx://pac@perceval.home/opt/wg0.conf
+[Interface]
+Address = 10.10.10.1/32,fd42::1/128
+PrivateKey = kKMYs+hg0eOW0frljAkLxkR7mYSmRUkKiBeEr38YRng=
+DNS = 1.1.1.1
+MTU = 1450
+
+[Peer]
+PublicKey = 5Typ4vO6elqdK7T19PE8KG56C4/jnQ+3e0uY13VnUxs=
+PresharedKey = jY1z8hQgp9rcyyI1EF5zKTOIJuT3FvdcRy7c4UX18GM=
+AllowedIPs = 0.0.0.0/0
+Endpoint = 51.210.109.212:8095
+PersistentKeepalive = 15
+#+end_src
+
+
+*** Nextcloud install with the "All In One" Docker Image
+#+begin_src shell
+sudo docker run \
+--init \
+--sig-proxy=false \
+--name nextcloud-aio-mastercontainer \
+--restart always \
+--publish 8080:8080 \
+--env APACHE_PORT=11000 \
+--env APACHE_IP_BINDING=0.0.0.0 \
+--env APACHE_ADDITIONAL_NETWORK="" \
+--env SKIP_DOMAIN_VALIDATION=true \
+--volume nextcloud_aio_mastercontainer:/mnt/docker-aio-config \
+--volume /var/run/docker.sock:/var/run/docker.sock:ro \
+ghcr.io/nextcloud-releases/all-in-one:latest
+#+end_src
+
+#+begin_src conf
+Passphrase
+
+erasable extrude reformat tastiness hybrid footpath flagman drainpipe
+#+end_src
+
+
+#+begin_src yaml
+
+#+end_src
+
+** Karadoc: My laptop for daily work
