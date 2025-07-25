@@ -775,6 +775,10 @@ Include config.local
 :end:
 
 [[https://hypr.land][hyprland]] is becoming my Window Manager of choice (I still use gnome-shell with some extension at $WORK).
+#+begin_src bash
+hyprctl reload
+#+end_src
+
 
 ** Monitors
 Monitor setup is managed by nwg-display which writes a [[file:~/.config/hypr/monitors.conf]]
@@ -1102,15 +1106,21 @@ listener {
 :properties:
 :header-args:js-json: :tangle "~/.config/waybar/config" :mkdirp yes
 :end:
+Reload waybar
+#+begin_src shell
+killall -SIGUSR2 waybar
+#+end_src
+
+#+RESULTS:
 
 #+begin_src js-json
 {
     "layer": "top",
     "position": "top",
     "mode": "dock",
-    "modules-left": ["hyprland/workspaces"],
+    "modules-left": ["hyprland/workspaces", "hyprland/window"],
     "modules-center": ["clock"],
-    "modules-right": ["tray", "battery"],
+    "modules-right": ["network", "cpu" , "idle_inhibitor", "tray", "bluetooth", "battery"],
     "hyprland/window": {
         "max-length": 50
     },
@@ -1121,7 +1131,52 @@ listener {
         "format": "{capacity}% {icon}",
         "format-icons": ["", "", "", "", ""]
     },
-    {}
+    "hyprland/workspaces": {
+        "persistent-workspaces": {
+            "*": [1,2,3,4,5,6,7,8,9,10]
+        }
+    },
+    "hyprland/window": {
+        "icon": true,
+        "icon-size": 16,
+        "rewrite": {
+            "(.*) — Mozilla Firefox": "$1",
+            "(.*?) .*?Doom Emacs": "$1",
+        }
+    },
+    "cpu": {
+        "interval": 10,
+        "format": "{}% ",
+        "max-length": 10
+    },
+    "bluetooth": {
+        "format": " {status}",
+        "format-connected": " {device_alias}",
+        "format-connected-battery": " {device_alias} {device_battery_percentage}%",
+        // "format-device-preference": [ "device1", "device2" ], // preference list deciding the displayed device
+        "tooltip-format": "{controller_alias}\t{controller_address}\n\n{num_connections} connected",
+        "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}",
+        "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}",
+        "tooltip-format-enumerate-connected-battery": "{device_alias}\t{device_address}\t{device_battery_percentage}%"
+    },
+    "idle_inhibitor": {
+        "format": "{icon}",
+        "format-icons": {
+            "activated": " ",
+            "deactivated": ""
+        }
+    },
+    "network": {
+        "format": "{ifname}",
+        "format-wifi": "{essid} ({signalStrength}%) ",
+        "format-ethernet": "{ipaddr}/{cidr} 󰊗",
+        "format-disconnected": "", //An empty format will hide the module.
+        "tooltip-format": "{ifname} via {gwaddr} 󰊗",
+        "tooltip-format-wifi": "{essid} ({signalStrength}%) ",
+        "tooltip-format-ethernet": "{ifname} ",
+        "tooltip-format-disconnected": "Disconnected",
+        "max-length": 50
+    },
 }
 #+end_src
 
