@@ -751,21 +751,19 @@ Host note note.crans.org
 *** Homelab
 #+begin_src conf
 Host merlin vps pierre-antoine-comby.fr comby.xyz
-     HostName 51.210.109.212
-     User paquiteau
-     IdentityFile ~/.ssh/id_ed25519
-     ForwardAgent yes
+    HostName 51.210.109.212
+    User paquiteau
+    Port 522
+    IdentityFile ~/.ssh/id_ed25519
+    ForwardAgent yes
 
-Host perceval home.comby.xyz
-     HostName home.comby.xyz
-     User pac
-     ProxyJump vps
-     IdentityFile ~/.ssh/id_ed25519
+Host perceval
+    HostName 192.168.1.30
+    User pac
+    IdentityFile ~/.ssh/id_ed25519
 
-Match exec "ip route get 192.168.1.30 | grep -q src\ 192\.168\.1\."
-      Host perceval
-      HostName 192.168.1.30
-      User pac
+Match Host perceval !Exec "nc -w1 -q0 %h %p < /dev/null"
+      ProxyCommand ssh paquiteau@vps -p 522
 
 #+end_src
 *** Local secret config
