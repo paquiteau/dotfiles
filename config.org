@@ -38,11 +38,20 @@ For instance below in the =.bashrc=
 
 ** Deployment
 
-
 #+begin_src bash :tangle install.sh :tangle-mode (identity #o755) :noweb tangle
 emacs --batch -Q -l org --eval '(org-babel-tangle-file "dotfiles.org")'
 #+end_src
-
+**** TODO Curl oneliner
+**** TODO CI for the dotfiles
+**** TODO Enlarge the deployment script:
+- Add support for GPG keys import (fetch from vps with ssh)
+- Add support for getting ssh keys (I could GPG-encrypt them)
+- Keyboard support (we want US french)
+- what if we can't get emacs locally ?
+**** TODO Export of this document ?
+- Nice html+css export (show the headers of org src block!)
+- Filter some part with no-export ?
+-
 * Shell: =bashrc=
 :properties:
 :header-args:bash: :tangle ~/.bashrc :tangle-mode (identity #o444)
@@ -464,8 +473,6 @@ alias cleanlatex='rm -f *.aux *.log *.out *.synctex.gz *.bbl *.bcf *.blg *.fls *
 #+begin_src bash
 alias passgen='< /dev/urandom tr -dc [:alnum:] | head -c16; echo'
 
-
-
 # mv and create retro link
 mvln () {
      echo "mv $1 ${2%%/}/$1 && ln -s ${2%%/}/$1 $1"
@@ -768,7 +775,7 @@ Match Host perceval !Exec "nc -w1 -q0 %h %p < /dev/null"
 Include config.local
 #+end_src
 
-* Hyprland
+* Hyprland :noexport:
 :properties:
 :header-args:conf: :tangle "~/.config/hypr/hyprland.conf"
 :end:
@@ -777,8 +784,6 @@ Include config.local
 #+begin_src bash
 hyprctl reload
 #+end_src
-
-
 ** Monitors
 Monitor setup is managed by nwg-display which writes a [[file:~/.config/hypr/monitors.conf]]
 
@@ -1069,11 +1074,11 @@ force_zero_scaling = true
 }
 #+end_src
 
-* Hyprlock
+** Hyprlock
 #+begin_src conf
 
 #+end_src
-* Hypridle
+** Hypridle
 #+begin_src conf :tangle "~/.config/hypr/hypridle.conf"
 general {
     lock_cmd = pidof hyprlock || hyprlock
@@ -1101,7 +1106,11 @@ listener {
 }
 
 #+end_src
-* Waybar
+** TODO power management
+** TODO Workspace Rules
+** TODO Special workspace
+** TODO
+* Waybar :noexport:
 :properties:
 :header-args:js-json: :tangle "~/.config/waybar/config" :mkdirp yes
 :end:
@@ -1179,7 +1188,7 @@ killall -SIGUSR2 waybar
 }
 #+end_src
 
-* Rofi
+* Rofi :noexport:
 #+begin_src rasi :tangle ~/.config/rofi/config.rasi :comments both :tangle-mode (identity #o444) :mkdirp yes
 /* rofi configuration */
 configuration {
@@ -1356,4 +1365,4 @@ configuration {
 #+begin_src c :tangle ~/.config/rofi/mytheme.rasi
 #+end_src
 
-* Gritterd / Regrit
+* Gritterd / Regrit :noexport:
