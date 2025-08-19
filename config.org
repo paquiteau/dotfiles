@@ -691,11 +691,43 @@ env.bak/
 venv.bak/
 #+end_src
 * GPG
+
+ [[id:fbec7db4-72d4-417e-a4e3-0f95edda7c40][GPG subkeys]]
+
 #+begin_src conf :tangle "~/.gnupg/gpg-agent.conf"
 enable-ssh-support
 default-cache-ttl 3600
 #+end_src
+#+begin_src conf :tangle "~/.gnupg/gpg.conf"
 
+#Minimal info leak no-emit-version
+no-comments
+export-options export-minimal
+
+#Display options keyid-format long
+keyid-format long
+with-fingerprint
+with-keygrip
+list-options show-uid-validity
+verify-options show-uid-validity
+
+#Crypto options personal-cipher-preferences AES256
+personal-digest-preferences SHA512
+default-preference-list SHA512 SHA384 SHA256 RIPEMD160 AES256 TWOFISH BLOWFISH ZLIB BZIP2 ZIP Uncompressed
+cipher-algo AES256
+digest-algo SHA512
+cert-digest-algo SHA512
+compress-algo ZLIB
+disable-cipher-algo 3DES
+# weak-digest SHA1
+
+#S2K options s2k-cipher-algo AES256
+s2k-digest-algo SHA512
+s2k-mode 3
+s2k-count 65011712
+
+keyserver keyserver.ubuntu.com
+#+end_src
 * SSH
 :properties:
 :header-args:conf: :tangle "~/.ssh/config"
