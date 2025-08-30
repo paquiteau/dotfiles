@@ -9,7 +9,7 @@
 This unique (and somewhat long file) contains is written in OrgMode, and managed with Emacs. each section configures a specific software that I use, and rely on the tangling mechanism to deploy these files
 ** Awesome list
 I am not the inventor or the sole user of this paradigm to manage my dot files, you may found interesting setup there:
-
+- https://web.archive.org/web/20190924102437/https://expoundite.net/guides/dotfile-management
 - https://github.com/search?q=language%3A%22Org%22%20dotfiles&type=repositories
 - https://github.com/farlado/dotfiles
 - https://github.com/lgfang/dotfiles
@@ -17,6 +17,7 @@ I am not the inventor or the sole user of this paradigm to manage my dot files, 
 - https://github.com/pniedzielski/dotfiles-ng
 - https://writepermission.com/introducing-literate-dotfiles.html
 - https://github.com/mitchty/dotfiles/tree/org-mode-all-the-things
+- https://news.ycombinator.com/item?id=44812611
 ** A few tips
 
 Adding this to the top of the file, ensure that I will not modify the dotfiles directly by mistake.
@@ -40,10 +41,10 @@ For instance below in the =.bashrc=
 
 
 #+begin_src bash :tangle install.sh :tangle-mode (identity #o755) :noweb tangle
-emacs --batch -Q -l org --eval '(org-babel-tangle-file "dotfiles.org")'
+emacs --batch -Q -l org --eval '(org-babel-tangle-file "config.org")'
 #+end_src
 
-* Shell: =bashrc=
+* Shell: =bash=
 :properties:
 :header-args:bash: :tangle ~/.bashrc :tangle-mode (identity #o444)
 :end:
@@ -268,7 +269,6 @@ nocolor_prompt="\[${nocolor}\]"
 #+end_src
 
 #+begin_src bash
-
 COLUMNS=$(tput cols)
 # Génération de la ligne de "-"
 function prompt_command
@@ -283,7 +283,7 @@ function prompt_command
     # quand on se trouve dans un dépôt versionné
 
     local -ax msg
-    git_detect && git_get_data
+    git_detect && git_get_data || VCS_info=""
     # Chemin courant, en faisant attention à la largeur de la fenêtre
     pwd=${PWD/#$HOME/'~'}
     if (( ${#pwd} + ${VCS_size} + 27 > COLUMNS )); then
@@ -321,17 +321,21 @@ function prompt_command
 
     # Deuxième ligne du prompt "user@host $"
     # Attention "\\\$" devient \$, c'est-à-dire # pour root, $ pour les autres
+if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+    color_prompt=yes
     PROMPT="${username_color_prompt}\u${symbols_color_prompt}@${host_color_prompt}\h${symbols_color_prompt}${SCREEN_ENV}${VENV}${symbols_color_prompt}\\\$ ${nocolor_prompt}"
     # On fusionne tout ça
     PS1="${linecolor}─( ${date_color}\D{%H:%M:%S}${linecolor} )─< ${pwd_color}$DIR${linecolor} >─${VCS_info}─$ERR─\n${PROMPT}"
+else
+    color_prompt=no
+    PS1="\u@\h\\\$"
+fi
 }
 
 # On régénére le prompt après chaque commande
 PROMPT_COMMAND=prompt_command
 
 PROMPT_COMMAND="history -a; $PROMPT_COMMAND"
-
-
 #+end_src
 
 ** Theming
@@ -345,7 +349,6 @@ if [[ "$USER" = root  ]]; then username_color=$rouge;  fi
 #+end_src
 
 #+begin_src bash
-
 host_color=none
 # Specific machines I own
 if [[ "$HOST" = galadriel  ]]; then host_color=$cyan;  fi
@@ -382,39 +385,20 @@ vcs_colon_color=${rouge_thin_prompt}
 
 ** History management
 #+begin_src bash
-
-# On spécifie explicitement le fichier d'historique.
-# En effet, si on jongle entre bash et zsh, per exemple,
-# comme ils n'utilisent pas le même format pour stocker le timestamp
-# des commandes, on se retrouve avec des comportements non souhaités
-# si on ne change pas le fichier d'historique entre les deux.
 export HISTFILE=~/.bash_history
 
-# On ne sauve pas les lignes dupliquées qui se suivent dans l'historique
-# ainsi que les commandes qui commencent par une espace
-export HISTCONTROL=ignoreboth
-
-# Nombre de lignes d'historique à garder
-export HISTSIZE=5000
-
-# la même chose dans le fichier d'historique
-export HISTFILESIZE=5000
-
-# Mémoriser le timestamp d'exécution de la commande
-export HISTTIMEFORMAT='%F %T - '
-
-# pour sauvegarder les commandes de plusieurs lignes (\ ) en une seule
-shopt -s cmdhist
-# pour enregistrer tout de suite les commandes dans l'historique
-# et non pas à la fermeture du shell
+eval "$(fzf --bash)"
+[ -f ~/.fzf.bash ] && source ~/.fzf.bash
+# Save history more easily
+# save the command directly (don't wait for shell to close)
 shopt -s histappend
+# save multi line commands as one.
+shopt -s cmdhist
 #+end_src
 ** Environment variables
 I know, I know, ... but for a quick edit, that would be plenty.
 #+begin_src bash
 export EDITOR='/usr/bin/vim'
-
-
 # Ajouter ~/bin, /sbin et /usr/sbin à son PATH
 PATH=~/.local/bin:~/bin:$PATH
 PATH=$PATH:/root/.local/bin
@@ -424,7 +408,7 @@ PATH=$PATH:/root/.local/bin
 :properties:
 :header-args:bash: :tangle "~/.bash_aliases"
 :end:
-*** Common stuff
+
 #+begin_src bash
 # Demander confirmation avant écrasement ou suppression des fichiers/dossiers
 alias rm='rm -i'
@@ -467,13 +451,27 @@ alias passgen='< /dev/urandom tr -dc [:alnum:] | head -c16; echo'
 
 
 # mv and create retro link
-mvln () {
-     echo "mv $1 ${2%%/}/$1 && ln -s ${2%%/}/$1 $1"
-     mv $1 ${2%%/}/$1 && ln -s ${2%%/}/${1%%/} ${1%%/}
+mvln(){
+  echo "mv $1 ${2%%/}/$1 && ln -s ${2%%/}/$1 $1"
+  mv $1 ${2%%/}/$1 && ln -s ${2%%/}/${1%%/} ${1%%/}
 }
 
 #+end_src
 
+** Final Bash stuff
+This is the last block of bashrc configuration:
+- we source all the bash related stuff if needed, and we launch the shell
+
+
+#+begin_src bash :tangle "~/.bashrc"
+[[ -f ~/.bash_aliases ]] && . ~/.bash_aliases
+[[ -f ~/.bash_aliases_local ]] && . ~/.bash_aliases_local
+[[ -f ~/.bashrc_local ]] && . ~/.bashrc_local
+
+# Launch the shell
+prompt_command
+#+end_src
+** Local Config
 * Git
 ** Gitconfig
 :properties:
@@ -1211,8 +1209,8 @@ killall -SIGUSR2 waybar
 }
 #+end_src
 
-* Rofi
-#+begin_src rasi :tangle ~/.config/rofi/config.rasi :comments both :tangle-mode (identity #o444) :mkdirp yes
+* Rofi :noexport:
+#+begin_src rasi :tangle ~/.config/rofi/config.rasi :tangle-mode (identity #o444) :mkdirp yes
 /* rofi configuration */
 configuration {
 /*	modes: "window,drun,run,ssh";*/
@@ -1388,4 +1386,7 @@ configuration {
 #+begin_src c :tangle ~/.config/rofi/mytheme.rasi
 #+end_src
 
-* Gritterd / Regrit
+* Gritterd / Regrit :noexport:
+
+* More ressources
+
