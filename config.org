@@ -806,6 +806,12 @@ Match Host perceval !Exec "nc -w1 -q0 %h %p < /dev/null"
 Include config.local
 #+end_src
 
+* Scripts utilities
+*** Zathura use X backend
+#+begin_src bash :tangle ~/.local/bin/zathura :tangle-mode (identity #o755) :mkdirp t
+#!/usr/bin/bash
+GDK_BACKEND=x11 /usr/bin/zathura "$@"
+#+end_src
 * Hyprland :noexport:
 :properties:
 :header-args:conf: :tangle "~/.config/hypr/hyprland.conf"
