@@ -371,12 +371,12 @@ fi
 
 # support de la couleur
 # Couleurs dans "user@host $"
-username_color_prompt="${username_color}"
-host_color_prompt="${host_color}"
-symbols_color_prompt=${blanc_prompt}
+username_color_prompt="\[${username_color}\]"
+host_color_prompt="\[${host_color}\]"
+symbols_color_prompt="${blanc_prompt}"
 # Couleur de la ligne séparatrice de prompt
 #    line_color_prompt=${cyan_prompt}
-linecolor=${host_color_prompt}
+linecolor="${host_color_prompt}"
 # Couleur du path actuel
 pwd_color=${jaune_prompt}
 # Couleur de la date (à chaque affichage du prompt)
