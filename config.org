@@ -823,10 +823,166 @@ Include config.local
 #+begin_src bash :tangle ~/.local/bin/zathura :tangle-mode (identity #o755) :mkdirp t
 #!/usr/bin/bash
 GDK_BACKEND=x11 /usr/bin/zathura "$@"
+
+* Network
+** Route emails over wifi
+$WORK  don't allow to use wired ethernet to access email protocoles, instead we have to use wifi.
+
+This is setup as a =systemd= service for convenience
+
+#+begin_src sh :tangle nil
+#!/bin/bash
+
+# # use as "mail_routes.sh add" to set route that uses wlan for the mail services
+# # use as "mail_routes.sh del" to delete these routes.
+
+# # Define the list of mail server domain names
+# DOMAINS=("imap.ens-paris-saclay.fr" "smtp.ens-paris-saclay.fr" "imap.google.com" "smtp.google.com" "imap.crans.org" "smtp.crans.org")
+
+# # Get the Wi-Fi interface name (change this if yours is different)
+# WIFI_IFACE="wlp0s20f3"
+
+# # Resolve Wi-Fi gateway and IP addresses
+# WIFI_GATEWAY=$(ip route show dev "$WIFI_IFACE" | grep "default" | awk '{print $3}')
+# WIFI_IP=$(ip addr show "$WIFI_IFACE" | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
+
+# # Loop through each domain and add a static route for its IP
+# for domain in "${DOMAINS[@]}"; do
+#     # Resolve the domain name to its IP address
+#     # We use 'dig +short' to get a clean IP address
+#     # ip_address=$(dig +short "$domain" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+#     mapfile -t ip_addresses < <(dig +short "$domain" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+#     # Check if an IP was found and is valid
+
+#     for ip_address in "${ip_addresses[@]}"; do
+#         if [[ -n "$ip_address" ]]; then
+#             echo "Adding route for $domain ($ip_address) via $WIFI_IFACE"
+#             ip route $1 "$ip_address/32" dev "$WIFI_IFACE"
+#         else
+#             echo "Could not resolve $domain. Skipping."
+#         fi
+#     done
+
+# done
+
+
+
+
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+# Define Wi-Fi interface name
+WIFI_IFACE="wlp0s20f3"
+
+# Resolve Wi-Fi gateway and IP addresses
+WIFI_GATEWAY=$(ip route show dev "$WIFI_IFACE" | grep "default" | awk '{print $3}')
+WIFI_IP=$(ip addr show "$WIFI_IFACE" | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
+
+# Check for a valid argument (add or del)
+case "$1" in
+    add)
+        echo "Adding routes for PBR..."
+        # Add the default route to the custom table
+        ip route add default via "$WIFI_GATEWAY" dev "$WIFI_IFACE" table wifi_table
+
+        # Add the rule to use the custom table for traffic from the Wi-Fi IP
+        ip rule add from "$WIFI_IP" table wifi_table
+        echo "PBR rules added successfully."
+        ;;
+    del)
+        echo "Deleting routes for PBR..."
+        # Remove the rule
+        ip rule del from "$WIFI_IP" table wifi_table
+
+        # Remove the default route from the custom table
+        ip route del default via "$WIFI_GATEWAY" dev "$WIFI_IFACE" table wifi_table
+        echo "PBR rules deleted successfully."
+        ;;
+    ,*)
+        echo "Usage: $0 {add|del}"
+        exit 1
+        ;;
+esac
+#+end_src
+
+#+begin_src sh :tangle "/sudo::/usr/local/bin/mail_routes.sh" :file-mode (identity #o755)
+#!/bin/bash
+#
+# Redirect IMAP/SMTP traffic over Wi-Fi (wlan0)
+#!/bin/bash
+#
+# Route mail server hostnames via Wi-Fi (resolves IPs dynamically)
+
+WIFI_IF="wlp0s20f3"
+WIFI_GW=$(ip route show dev $WIFI_IF | awk '/default/ {print $3}')
+TABLE="mail"
+
+# Hostnames of your mail services
+HOSTS=(
+  imap.example.com
+  smtp.example.com
+)
+
+# Resolve hostnames → IPs
+resolve_ips() {
+    local host=$1
+    # Resolve both A and AAAA records (IPv4 + IPv6)
+    dig +short A "$host"
+    dig +short AAAA "$host"
+}
+
+case "$1" in
+    start)
+        grep -qE "^[0-9]+\s+$TABLE" /etc/iproute2/rt_tables || \
+            echo "100 $TABLE" | sudo tee -a /etc/iproute2/rt_tables
+
+        ip route flush table $TABLE
+        ip route add default via $WIFI_GW dev $WIFI_IF table $TABLE
+
+        for host in "${HOSTS[@]}"; do
+            for ip in $(resolve_ips "$host"); do
+                echo "Routing $host ($ip) via Wi-Fi"
+                ip rule add to "$ip" table $TABLE
+            done
+        done
+        ;;
+    stop)
+        for host in "${HOSTS[@]}"; do
+            for ip in $(resolve_ips "$host"); do
+                ip rule del to "$ip" table $TABLE 2>/dev/null
+            done
+        done
+        ip route flush table $TABLE
+        ;;
+    restart)
+        $0 stop
+        $0 start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+#+end_src
+
+#+begin_src conf :tangle "/sudo::/etc/systemd/system/mail-routes.service"
+[Unit]
+Description=Add and remove static routes for mail servers
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/mail_routes.sh start
+ExecStop=/usr/local/bin/mail_routes.sh stop
+
+[Install]
+WantedBy=multi-user.target
 #+end_src
 * Hyprland :noexport:
 :properties:
-:header-args:conf: :tangle "~/.config/hypr/hyprland.conf"
+:header-args:conf: :tangle "~/.config/hypr/hyprland.conf" :mkdirp t
 :end:
 
 [[https://hypr.land][hyprland]] is becoming my Window Manager of choice (I still use gnome-shell with some extension at $WORK).
