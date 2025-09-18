@@ -397,8 +397,16 @@ vcs_colon_color=${rouge_thin_prompt}
 #+begin_src bash
 export HISTFILE=~/.bash_history
 
-eval "$(fzf --bash)"
-[ -f ~/.fzf.bash ] && source ~/.fzf.bash
+#
+fzf_output=$(fzf --bash 2>&1)
+fzf_status=$?
+if [ $fzf_status -eq 0 ]; then
+    eval "$fzf_output"
+    [ -f ~/.fzf.bash ] && source ~/.fzf.bash
+else
+    source /usr/share/doc/fzf/examples/key-bindings.bash
+fi
+
 # Save history more easily
 # save the command directly (don't wait for shell to close)
 shopt -s histappend
@@ -408,11 +416,10 @@ shopt -s cmdhist
 ** Environment variables
 I know, I know, ... but for a quick edit, that would be plenty.
 #+begin_src bash
-export EDITOR='/usr/bin/vim'
+export EDITOR='/usr/bin/vim' # FIXME use emacsclient -nw
 # Ajouter ~/bin, /sbin et /usr/sbin à son PATH
-PATH=~/.local/bin:~/bin:$PATH
+PATH=~/.config/emacs/bin:$PATH
 PATH=$PATH:/root/.local/bin
-
 #+end_src
 ** Shell: =bash_aliases=
 :properties:
