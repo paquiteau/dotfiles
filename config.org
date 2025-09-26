@@ -823,7 +823,7 @@ Include config.local
 #+begin_src bash :tangle ~/.local/bin/zathura :tangle-mode (identity #o755) :mkdirp t
 #!/usr/bin/bash
 GDK_BACKEND=x11 /usr/bin/zathura "$@"
-
+#+end_src
 * Network
 ** Route emails over wifi
 $WORK  don't allow to use wired ethernet to access email protocoles, instead we have to use wifi.
