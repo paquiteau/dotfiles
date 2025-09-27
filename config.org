@@ -40,8 +40,25 @@ For instance below in the =.bashrc=
 ** Deployment
 
 #+begin_src bash :tangle install.sh :tangle-mode (identity #o755) :noweb tangle
+git clone git@github.com:paquiteau/dotfiles.git
 emacs --batch -Q -l org --eval '(org-babel-tangle-file "config.org")'
 #+end_src
+
+#+name: tangle-remote
+#+begin_src emacs-lisp
+(defun tangle-remote (name)
+(if (file-remote-p (buffer-file-name))
+  (let* ((tramp-con (tramp-dissect-file-name (buffer-file-name)))
+         (tramp-home (tramp-get-home-directory tramp-con))
+         (tramp-host (tramp-file-name-host tramp-con)))
+    (expand-file-name (format "/sshx:%s:%s/%s" tramp-host tramp-home name)))
+  (expand-file-name name (getenv "HOME"))
+  )
+)
+#+end_src
+
+#+RESULTS: tangle-remote
+: tangle-remote
 
 **** TODO Curl oneliner
 **** TODO CI for the dotfiles
@@ -56,7 +73,7 @@ emacs --batch -Q -l org --eval '(org-babel-tangle-file "config.org")'
 -
 * Shell: =bashrc=
 :properties:
-:header-args:bash: :tangle ~/.bashrc :tangle-mode (identity #o444)
+:header-args:bash: :tangle (tangle-remote ".bashrc") :tangle-mode (identity #o444)
 :end:
 #+begin_src bash
 #!/usr/bin/env bash
