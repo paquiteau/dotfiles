@@ -1,6 +1,6 @@
 #+title: Configuration files for my machines
 #+author: Pierre-Antoine Comby
-#+startup: show3levels
+#+startup: show2levels indent
 
 #+property: header-args: :comments both :tangle-mode (identity #o444) :mkdirp yes
 #+property: header-args:conf :comments both :tangle-mode (identity #o444) :mkdirp yes
@@ -18,6 +18,9 @@ I am not the inventor or the sole user of this paradigm to manage my dot files, 
 - https://writepermission.com/introducing-literate-dotfiles.html
 - https://github.com/mitchty/dotfiles/tree/org-mode-all-the-things
 - https://news.ycombinator.com/item?id=44812611
+
+*** Emacs stuff
+- https://joshblais.com/blog/how-i-am-deeply-integrating-emacs/
 ** A few tips
 
 Adding this to the top of the file, ensure that I will not modify the dotfiles directly by mistake.
@@ -45,7 +48,7 @@ emacs --batch -Q -l org --eval '(org-babel-tangle-file "config.org")'
 #+end_src
 
 #+name: tangle-remote
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :noweb true
 (defun tangle-remote (name)
 (if (file-remote-p (buffer-file-name))
   (let* ((tramp-con (tramp-dissect-file-name (buffer-file-name)))
@@ -437,6 +440,12 @@ export EDITOR='/usr/bin/vim' # FIXME use emacsclient -nw
 # Ajouter ~/bin, /sbin et /usr/sbin à son PATH
 PATH=~/.config/emacs/bin:$PATH
 PATH=$PATH:/root/.local/bin
+#+end_src
+** NODEJS
+#+begin_src bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 #+end_src
 ** Shell: =bash_aliases=
 :properties:
@@ -835,14 +844,8 @@ Match Host perceval !Exec "nc -w1 -q0 %h %p < /dev/null"
 Include config.local
 #+end_src
 
-* Scripts utilities
-*** Zathura use X backend
-#+begin_src bash :tangle ~/.local/bin/zathura :tangle-mode (identity #o755) :mkdirp t
-#!/usr/bin/bash
-GDK_BACKEND=x11 /usr/bin/zathura "$@"
-#+end_src
 * Network
-** Route emails over wifi
+** TODO Route emails over wifi
 $WORK  don't allow to use wired ethernet to access email protocoles, instead we have to use wifi.
 
 This is setup as a =systemd= service for convenience
@@ -997,6 +1000,199 @@ ExecStop=/usr/local/bin/mail_routes.sh stop
 [Install]
 WantedBy=multi-user.target
 #+end_src
+* Software
+** Zathura
+
+Zathura is a light pdf viewer. It can be fully keyboard driven.
+
+#+name: Config
+#+begin_src conf :tangle ~/.config/zathura/zathurarc
+# Config in org mode
+# One page per row by default
+set pages-per-row 1
+map t set "pages-per-row 3"
+map T set "pages-per-row 2"
+
+#stop at page boundries
+set scroll-page-aware "true"
+set smooth-scroll "true"
+set scroll-full-overlap 0.01
+set scroll-step 100
+
+# Synctex
+set synctex true
+set synctex-editor-command "emacsclient +%{line} %{input}"
+#zoom settings
+set zoom-min 10
+#set guioptions ""
+set first-page-column 1:1
+
+# zathurarc-dark
+
+set default-bg "#282c34" #00
+set default-fg "#bbc2cf" #01
+
+set statusbar-fg "#B0B0B0" #04
+set statusbar-bg "#202020" #01
+
+set inputbar-bg "#151515" #00 currently not used
+set inputbar-fg "#FFFFFF" #02
+
+set notification-error-bg "#AC4142" #08
+set notification-error-fg "#151515" #00
+
+set notification-warning-bg "#AC4142" #08
+set notification-warning-fg "#151515" #00
+
+set highlight-color "#F4BF75" #0A
+set highlight-active-color "#6A9FB5" #0D
+
+set completion-highlight-fg "#151515" #02
+set completion-highlight-bg "#90A959" #0C
+
+set completion-bg "#303030" #02
+set completion-fg "#E0E0E0" #0C
+
+set notification-bg "#90A959" #0B
+set notification-fg "#151515" #00
+
+#set recolor "true"
+set recolor-lightcolor "#282c34" #00
+set recolor-darkcolor "#E0E0E0" #06
+set recolor-reverse-video "true"
+set recolor-keephue "true"
+
+set selection-clipboard clipboard
+
+#+end_src
+
+* Scripts 
+
+** Rsync script for automatic synchronisation
+
+#+begin_src bash :tangle "~/.local/bin/autosync" :shebang #!/bin/bash
+while inotifywait -r -e modify,create,delete,move $1
+    do
+        rsync -e ssh -rlptDhvz $1/ $2
+done
+#+end_src
+** Code sync Folder
+:PROPERTIES:
+:ID:       04aa6da2-8bed-4d30-b51b-d8dd262e7214
+:END:
+This filter out all git-ignored files.
+
+#+begin_src bash :tangle "~/bin/code_sync" :shebang #!/bin/bash :file-mode "#o755"
+# Example
+# code_sync simfmri raw_zachs
+
+source_path="$1"
+target_path="$2"
+rm /tmp/gittracked
+abs_source_path=$(realpath $source_path)
+all_gittracked $abs_source_path | sed "s|$abs_source_path/||g" | tr " " "\n" > /tmp/gittracked
+
+rsync -rlptDhR $abs_source_path $target_path \
+        --progress \
+        --delete --force \
+        --files-from=/tmp/gittracked \
+        --exclude=".git" \
+        --verbose
+
+while inotifywait -r -e modify,create,delete $abs_source_path
+do
+    rsync -rlptDh $abs_source_path $target_path \
+          --progress \
+          --delete --force \
+          --files-from=/tmp/gittracked \
+          --verbose
+done
+#+end_src
+
+#+begin_src bash :tangle "~/bin/tpz_code_sync" :shebang #!/bin/bash :file-mode "#o755"
+
+# Copy files to topaze using rsync
+
+source_path="$HOME/gits/nsp/code"
+target_path="topaze:/ccc/work/cont003/drf/combypie"
+
+all_gittracked $source_path | tr " " "\n" > /tmp/gittracked
+# copy version to ease remote installation
+find . -type f -name  "_version.py" | xargs -I {} readlink -f {} >> /tmp/gittracked
+
+rsync -azh $source_path $target_path \
+        --progress \
+        --delete --force \
+        --exclude=".git" \
+        --files-from=/tmp/gittracked \
+        --verbose
+
+while inotifywait -r -e modify,create,delete $source_path --fromfile /tmp/gittracked
+do
+rsync -azh $source_path $target_path \
+        --progress \
+        --delete --force \
+        --exclude=".git" \
+        --files-from=/tmp/gittracked \
+        --verbose
+
+done
+#+end_src
+
+
+#+begin_src bash :tangle "~/bin/all_gittracked" :file-mode "#o755" :shebang #!/bin/bash
+
+# all_gittracked.sh
+# Return a list of all the file tracked by git under a parent dir
+
+# Set the starting directory for the search
+start_dir=$1
+
+# Find all subdirectories that contain a .git folder
+git_dirs=$(find `realpath "$start_dir"` -type d -name ".git" -exec dirname {} \;)
+# Loop through the Git directories and list tracked files
+for git_dir in $git_dirs; do
+    # Change to the Git repository directory
+    cd "$git_dir"
+    # Get the repository name
+    #repo_name=$(basename $(git rev-parse --show-toplevel) 2>/dev/null)
+    basefiles=$(git ls-tree --full-tree -r --full-name --name-only HEAD 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        continue
+    fi
+    tracked_files="${tracked_files} $(git ls-tree --full-tree -r --full-name --name-only HEAD 2>/dev/null | xargs -I{} readlink -f {})"
+    # Find all files tracked by Git in the repository
+done
+echo $tracked_files
+#+end_src
+
+#+RESULTS:
+
+
+
+#+begin_src bash :shebang #!/bin/bash :file-mode "#o775" :tangle "~/bin/all_gitignore"
+
+# all_gitignore.sh
+# Set the starting directory for the search
+start_dir=$1
+
+# Create an array to hold the paths of all .gitignore files
+gitignore_paths=()
+
+# Find all .gitignore files recursively and add their paths to the array
+while IFS= read -r -d '' file; do
+    gitignore_paths+=("$file")
+done < <(find "$start_dir" -name '.gitignore' -type f -print0)
+
+# Concatenate the contents of all .gitignore files into a single file
+cat "${gitignore_paths[@]}" | grep -e "^[^#]" | sort | uniq > all-gitignores
+
+#+end_src
+#+begin_src shell
+all_gitignore /home/pac/gits/nsp/code/
+cat all-gitignores
+#+end_src
+
 * Hyprland :noexport:
 :properties:
 :header-args:conf: :tangle "~/.config/hypr/hyprland.conf" :mkdirp t
