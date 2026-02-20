@@ -433,13 +433,14 @@ shopt -s histappend
 # save multi line commands as one.
 shopt -s cmdhist
 #+end_src
-** Environment variables
+** $PATH Environment variables
 I know, I know, ... but for a quick edit, that would be plenty.
 #+begin_src bash
 export EDITOR='/usr/bin/vim' # FIXME use emacsclient -nw
 # Ajouter ~/bin, /sbin et /usr/sbin à son PATH
-PATH=~/.config/emacs/bin:$PATH
+PATH=~/.config/emacs/bin:~/.juliaUp/julia:$PATH
 PATH=$PATH:/root/.local/bin
+#PATH=$PATH:/usr/local/cuda/bin
 #+end_src
 ** NODEJS
 #+begin_src bash
@@ -1193,7 +1194,7 @@ all_gitignore /home/pac/gits/nsp/code/
 cat all-gitignores
 #+end_src
 
-* Hyprland :noexport:
+* Hyprland [/] :noexport:
 :properties:
 :header-args:conf: :tangle "~/.config/hypr/hyprland.conf" :mkdirp t
 :end:
