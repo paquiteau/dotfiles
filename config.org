@@ -3,7 +3,6 @@
 #+startup: show2levels indent
 
 #+property: header-args: :comments both :tangle-mode (identity #o444) :mkdirp yes
-#+property: header-args:conf :comments both :tangle-mode (identity #o444) :mkdirp yes
 
 * How does this work
 This unique (and somewhat long file) contains is written in OrgMode, and managed with Emacs. each section configures a specific software that I use, and rely on the tangling mechanism to deploy these files
@@ -43,40 +42,39 @@ For instance below in the =.bashrc=
 ** Deployment
 
 #+begin_src bash :tangle install.sh :tangle-mode (identity #o755) :noweb tangle
-git clone git@github.com:paquiteau/dotfiles.git
+# git clone git@github.com:paquiteau/dotfiles.git
 emacs --batch -Q -l org --eval '(org-babel-tangle-file "config.org")'
 #+end_src
 
 #+name: tangle-remote
 #+begin_src emacs-lisp :noweb true
-(defun tangle-remote (name)
-(if (file-remote-p (buffer-file-name))
-  (let* ((tramp-con (tramp-dissect-file-name (buffer-file-name)))
-         (tramp-home (tramp-get-home-directory tramp-con))
-         (tramp-host (tramp-file-name-host tramp-con)))
-    (expand-file-name (format "/sshx:%s:%s/%s" tramp-host tramp-home name)))
-  (expand-file-name name (getenv "HOME"))
+(defun tangle-remote (name &optional host sudo)
+  (cond ((file-remote-p (buffer-file-name))
+         (let* ((tramp-con (tramp-dissect-file-name (buffer-file-name)))
+                (tramp-home (tramp-get-home-directory tramp-con))
+                (tramp-host (tramp-file-name-host tramp-con)))
+           (when (or (not host) (string= tramp-host host))
+             (expand-file-name (format "/sshx:%s:%s/%s" tramp-host tramp-home name)))))
+        ((or (not host) (string= host system-name)) (expand-file-name name (getenv "HOME")))
+        (t nil))
   )
-)
 #+end_src
 
 #+RESULTS: tangle-remote
 : tangle-remote
-
 **** TODO Curl oneliner
 **** TODO CI for the dotfiles
 **** TODO Enlarge the deployment script:
 - Add support for GPG keys import (fetch from vps with ssh)
 - Add support for getting ssh keys (I could GPG-encrypt them)
 - Keyboard support (we want US french)
-- what if we can't get emacs locally ?
 **** TODO Export of this document ?
 - Nice html+css export (show the headers of org src block!)
 - Filter some part with no-export ?
 -
 * Shell: =bashrc=
 :properties:
-:header-args:bash: :tangle (tangle-remote ".bashrc") :tangle-mode (identity #o444)
+:header-args:bash: :tangle (tangle-remote ".bashrc")
 :end:
 #+begin_src bash
 #!/usr/bin/env bash
@@ -438,6 +436,7 @@ I know, I know, ... but for a quick edit, that would be plenty.
 #+begin_src bash
 export EDITOR='/usr/bin/vim' # FIXME use emacsclient -nw
 # Ajouter ~/bin, /sbin et /usr/sbin à son PATH
+PATH="~/.local/bin":$PATH
 PATH=~/.config/emacs/bin:~/.juliaUp/julia:$PATH
 PATH=$PATH:/root/.local/bin
 #PATH=$PATH:/usr/local/cuda/bin
@@ -517,7 +516,7 @@ prompt_command
 * Git
 ** Gitconfig
 :properties:
-:header-args:conf: :tangle ~/.gitconfig
+:header-args:conf: :tangle (tangle-remote ".gitconfig")
 :end:
 #+begin_src conf
 
@@ -831,6 +830,13 @@ Host merlin vps pierre-antoine-comby.fr comby.xyz
     IdentityFile ~/.ssh/id_ed25519
     ForwardAgent yes
 
+Host leodagan 192.168.1.27
+    HostName 192.168.1.27
+    User pac
+    Port 22
+    IdentityFile ~/.ssh/id_ed25519
+    ForwardAgent yes
+
 Host perceval
     HostName 192.168.1.30
     User pac
@@ -838,6 +844,7 @@ Host perceval
 
 Match Host perceval !Exec "nc -w1 -q0 %h %p < /dev/null"
       ProxyCommand ssh paquiteau@vps -p 522
+
 
 #+end_src
 *** Local secret config
@@ -1194,7 +1201,7 @@ all_gitignore /home/pac/gits/nsp/code/
 cat all-gitignores
 #+end_src
 
-* Hyprland [/] :noexport:
+* Hyprland [0/5] :noexport:
 :properties:
 :header-args:conf: :tangle "~/.config/hypr/hyprland.conf" :mkdirp t
 :end:
@@ -1608,3 +1615,8 @@ killall -SIGUSR2 waybar
 #+end_src
 
 * Gritterd / Regrit :noexport:
+
+* Local Variables 
+# Local Variables:
+# eval: (progn (org-babel-goto-named-src-block "tangle-remote") (org-babel-execute-src-block) (outline-hide-sublevels 1))
+# End:
