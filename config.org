@@ -4,6 +4,25 @@
 
 #+property: header-args: :comments both :tangle-mode (identity #o444) :mkdirp yes
 
+#+name: tangle-remote
+#+begin_src emacs-lisp :noweb true :results nil
+(defun tangle-remote (name &optional host sudo)
+  (cond ((file-remote-p (buffer-file-name))
+         (let* ((tramp-con (tramp-dissect-file-name (buffer-file-name)))
+                (tramp-home (tramp-get-home-directory tramp-con))
+                (tramp-host (tramp-file-name-host tramp-con)))
+           (when (or (not host) (string= tramp-host host))
+             (expand-file-name (format "/sshx:%s:%s/%s" tramp-host tramp-home name)))))
+        ((or (not host) (string= host system-name)) (expand-file-name name (getenv "HOME")))
+        (t nil))
+  )
+#+end_src
+
+#+RESULTS: tangle-remote
+: tangle-remote
+
+
+
 * How does this work
 This unique (and somewhat long file) contains is written in OrgMode, and managed with Emacs. each section configures a specific software that I use, and rely on the tangling mechanism to deploy these files
 ** Awesome list
@@ -46,29 +65,13 @@ For instance below in the =.bashrc=
 emacs --batch -Q -l org --eval '(org-babel-tangle-file "config.org")'
 #+end_src
 
-#+name: tangle-remote
-#+begin_src emacs-lisp :noweb true
-(defun tangle-remote (name &optional host sudo)
-  (cond ((file-remote-p (buffer-file-name))
-         (let* ((tramp-con (tramp-dissect-file-name (buffer-file-name)))
-                (tramp-home (tramp-get-home-directory tramp-con))
-                (tramp-host (tramp-file-name-host tramp-con)))
-           (when (or (not host) (string= tramp-host host))
-             (expand-file-name (format "/sshx:%s:%s/%s" tramp-host tramp-home name)))))
-        ((or (not host) (string= host system-name)) (expand-file-name name (getenv "HOME")))
-        (t nil))
-  )
-#+end_src
-
-#+RESULTS: tangle-remote
-: tangle-remote
-**** TODO Curl oneliner
-**** TODO CI for the dotfiles
-**** TODO Enlarge the deployment script:
+*** TODO Curl oneliner
+*** TODO CI for the dotfiles
+*** TODO Enlarge the deployment script:
 - Add support for GPG keys import (fetch from vps with ssh)
 - Add support for getting ssh keys (I could GPG-encrypt them)
 - Keyboard support (we want US french)
-**** TODO Export of this document ?
+*** TODO Export of this document ?
 - Nice html+css export (show the headers of org src block!)
 - Filter some part with no-export ?
 -
@@ -431,15 +434,14 @@ shopt -s histappend
 # save multi line commands as one.
 shopt -s cmdhist
 #+end_src
-** $PATH Environment variables
+** =$PATH= Environment variable
 I know, I know, ... but for a quick edit, that would be plenty.
 #+begin_src bash
 export EDITOR='/usr/bin/vim' # FIXME use emacsclient -nw
-# Ajouter ~/bin, /sbin et /usr/sbin à son PATH
 PATH="~/.local/bin":$PATH
 PATH=~/.config/emacs/bin:~/.juliaUp/julia:$PATH
 PATH=$PATH:/root/.local/bin
-#PATH=$PATH:/usr/local/cuda/bin
+PATH=$PATH:/usr/local/cuda/bin
 #+end_src
 ** NODEJS
 #+begin_src bash
@@ -836,6 +838,13 @@ Host leodagan 192.168.1.27
     Port 22
     IdentityFile ~/.ssh/id_ed25519
     ForwardAgent yes
+    
+Host leodagan-vpn 10.10.10.3
+    HostName 10.10.10.3
+    User pac
+    Port 22
+    IdentityFile ~/.ssh/id_ed25519
+    ForwardAgent yes
 
 Host perceval
     HostName 192.168.1.30
@@ -1085,9 +1094,6 @@ while inotifywait -r -e modify,create,delete,move $1
 done
 #+end_src
 ** Code sync Folder
-:PROPERTIES:
-:ID:       04aa6da2-8bed-4d30-b51b-d8dd262e7214
-:END:
 This filter out all git-ignored files.
 
 #+begin_src bash :tangle "~/bin/code_sync" :shebang #!/bin/bash :file-mode "#o755"
@@ -1201,6 +1207,62 @@ all_gitignore /home/pac/gits/nsp/code/
 cat all-gitignores
 #+end_src
 
+* LLM
+** LLAMA CPP
+
+https://gist.github.com/DocShotgun/a02a4c0c0a57e43ff4f038b46ca66ae0
+
+** OpenCode
+#+begin_src json :noweb-prefix no 
+{
+  "$schema": "https://opencode.ai/config.json",
+}
+#+end_src
+
+#+name: get-token
+#+begin_src emacs-lisp :result output export: none :var host=""
+(ghub--token host "paquiteau" "forge")
+#+end_src
+
+#+name: opencode-provider
+#+begin_src json 
+  "provider": {
+    "llama-local": {
+      "name": "Llama.cpp (RX 9070XT)",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "http://10.10.10.3:8080/v1"
+      },
+      "models": {
+        "unsloth/Qwen3.6-35B-A3B-GGUF": {
+          "name": "Qwen3.6-35B-A3B Q4_K_XL"
+        }
+      }
+    }
+  }
+#+end_src
+
+#+name: opencode-mcp
+#+begin_src json :noweb no-export
+  "mcp": {
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer <<get-token("api.github.com")>>"
+      }
+    }
+  }
+#+end_src
+#+begin_src json :tangle (tangle-remote ".config/opencode/opencode.jsonc") :mkdirp t :noweb no-export
+{
+  "$schema": "https://opencode.ai/config.json",
+  <<opencode-provider>>,
+  <<opencode-mcp>>
+}
+#+end_src
 * Hyprland [0/5] :noexport:
 :properties:
 :header-args:conf: :tangle "~/.config/hypr/hyprland.conf" :mkdirp t
