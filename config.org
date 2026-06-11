@@ -116,7 +116,7 @@ vcs_formats(){
     local msg
     local -i i
     # with color support
-    msg="${nocolor_prompt}${vcs_symbols_color}[${vcs_repo_color}%s${vcs_sep_color}/${vcs_branch_color}%s"
+    msg="[${nocolor_prompt}${vcs_repo_color}%s${vcs_sep_color}/${vcs_branch_color}%s"
     msg=$(printf $msg ${base/*\/} $branch)
     if [[ -n ${rev} ]] ; then
         msg="${msg}${vcs_colon_color}:${vcs_rev_color}${rev}"
@@ -124,7 +124,7 @@ vcs_formats(){
     if [[ -n ${action} ]] ; then
         msg="${msg}${nocolor_prompt}|${vcs_action_color}${action}"
     fi
-    VCS_info="${msg}${vcs_symbols_color}]${line_color_prompt}"
+    VCS_info="${msg}${linecolor}]"
     return 0
 }
 
@@ -255,6 +255,9 @@ git_get_data(){
 
 
 #+end_src
+
+#+RESULTS:
+
 ** A nice color prompt
 
 #+name: bash_colors
@@ -788,6 +791,13 @@ AddKeysToAgent ask
 
 When using =ForwardAgent yes= the agent (and its loaded keys) will be forwarded to the new host, meaning the original keys could be used for the next connection from the host.
 ** Hosts
+
+*** Local secret config
+#+begin_src conf
+
+Include config.local
+
+#+end_src
 *** Forges
 For "classic" git forges, I prefer to use the 443 alternative connection, port 22 is not necessary open when you go abroad.
 #+begin_src conf
@@ -810,6 +820,7 @@ Host gitlab.inria.fr
      HostName gitlab.inria.fr
      User git
      IdentityFile ~/.ssh/gitlab-inria
+     
 #+end_src
 *** Crans
 #+begin_src conf
@@ -821,6 +832,7 @@ Host note note.crans.org
     User pac
     IdentityFile ~/.ssh/bde_rsa
     ForwardAgent yes
+    
 #+end_src
 
 *** Homelab
@@ -851,14 +863,6 @@ Host perceval
     User pac
     IdentityFile ~/.ssh/id_ed25519
 
-Match Host perceval !Exec "nc -w1 -q0 %h %p < /dev/null"
-      ProxyCommand ssh paquiteau@vps -p 522
-
-
-#+end_src
-*** Local secret config
-#+begin_src conf
-Include config.local
 #+end_src
 
 * Network
