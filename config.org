@@ -21,6 +21,10 @@
 #+RESULTS: tangle-remote
 : tangle-remote
 
+#+name: eval-elisp
+#+begin_src emacs-lisp :var str="()"
+(eval (car (read-from-string str)))
+#+end_src
 
 
 * How does this work
@@ -258,6 +262,10 @@ git_get_data(){
 
 #+RESULTS:
 
+** Precommit
+#+begin_src bash 
+export PRE_COMMIT_ALLOW_NO_CONFIG=1
+#+end_src
 ** A nice color prompt
 
 #+name: bash_colors
@@ -865,162 +873,6 @@ Host perceval
 
 #+end_src
 
-* Network
-** TODO Route emails over wifi
-$WORK  don't allow to use wired ethernet to access email protocoles, instead we have to use wifi.
-
-This is setup as a =systemd= service for convenience
-
-#+begin_src sh :tangle nil
-#!/bin/bash
-
-# # use as "mail_routes.sh add" to set route that uses wlan for the mail services
-# # use as "mail_routes.sh del" to delete these routes.
-
-# # Define the list of mail server domain names
-# DOMAINS=("imap.ens-paris-saclay.fr" "smtp.ens-paris-saclay.fr" "imap.google.com" "smtp.google.com" "imap.crans.org" "smtp.crans.org")
-
-# # Get the Wi-Fi interface name (change this if yours is different)
-# WIFI_IFACE="wlp0s20f3"
-
-# # Resolve Wi-Fi gateway and IP addresses
-# WIFI_GATEWAY=$(ip route show dev "$WIFI_IFACE" | grep "default" | awk '{print $3}')
-# WIFI_IP=$(ip addr show "$WIFI_IFACE" | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
-
-# # Loop through each domain and add a static route for its IP
-# for domain in "${DOMAINS[@]}"; do
-#     # Resolve the domain name to its IP address
-#     # We use 'dig +short' to get a clean IP address
-#     # ip_address=$(dig +short "$domain" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
-#     mapfile -t ip_addresses < <(dig +short "$domain" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
-#     # Check if an IP was found and is valid
-
-#     for ip_address in "${ip_addresses[@]}"; do
-#         if [[ -n "$ip_address" ]]; then
-#             echo "Adding route for $domain ($ip_address) via $WIFI_IFACE"
-#             ip route $1 "$ip_address/32" dev "$WIFI_IFACE"
-#         else
-#             echo "Could not resolve $domain. Skipping."
-#         fi
-#     done
-
-# done
-
-
-
-
-# Exit immediately if a command exits with a non-zero status.
-set -e
-
-# Define Wi-Fi interface name
-WIFI_IFACE="wlp0s20f3"
-
-# Resolve Wi-Fi gateway and IP addresses
-WIFI_GATEWAY=$(ip route show dev "$WIFI_IFACE" | grep "default" | awk '{print $3}')
-WIFI_IP=$(ip addr show "$WIFI_IFACE" | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
-
-# Check for a valid argument (add or del)
-case "$1" in
-    add)
-        echo "Adding routes for PBR..."
-        # Add the default route to the custom table
-        ip route add default via "$WIFI_GATEWAY" dev "$WIFI_IFACE" table wifi_table
-
-        # Add the rule to use the custom table for traffic from the Wi-Fi IP
-        ip rule add from "$WIFI_IP" table wifi_table
-        echo "PBR rules added successfully."
-        ;;
-    del)
-        echo "Deleting routes for PBR..."
-        # Remove the rule
-        ip rule del from "$WIFI_IP" table wifi_table
-
-        # Remove the default route from the custom table
-        ip route del default via "$WIFI_GATEWAY" dev "$WIFI_IFACE" table wifi_table
-        echo "PBR rules deleted successfully."
-        ;;
-    ,*)
-        echo "Usage: $0 {add|del}"
-        exit 1
-        ;;
-esac
-#+end_src
-
-#+begin_src sh :tangle "/sudo::/usr/local/bin/mail_routes.sh" :file-mode (identity #o755)
-#!/bin/bash
-#
-# Redirect IMAP/SMTP traffic over Wi-Fi (wlan0)
-#!/bin/bash
-#
-# Route mail server hostnames via Wi-Fi (resolves IPs dynamically)
-
-WIFI_IF="wlp0s20f3"
-WIFI_GW=$(ip route show dev $WIFI_IF | awk '/default/ {print $3}')
-TABLE="mail"
-
-# Hostnames of your mail services
-HOSTS=(
-  imap.example.com
-  smtp.example.com
-)
-
-# Resolve hostnames → IPs
-resolve_ips() {
-    local host=$1
-    # Resolve both A and AAAA records (IPv4 + IPv6)
-    dig +short A "$host"
-    dig +short AAAA "$host"
-}
-
-case "$1" in
-    start)
-        grep -qE "^[0-9]+\s+$TABLE" /etc/iproute2/rt_tables || \
-            echo "100 $TABLE" | sudo tee -a /etc/iproute2/rt_tables
-
-        ip route flush table $TABLE
-        ip route add default via $WIFI_GW dev $WIFI_IF table $TABLE
-
-        for host in "${HOSTS[@]}"; do
-            for ip in $(resolve_ips "$host"); do
-                echo "Routing $host ($ip) via Wi-Fi"
-                ip rule add to "$ip" table $TABLE
-            done
-        done
-        ;;
-    stop)
-        for host in "${HOSTS[@]}"; do
-            for ip in $(resolve_ips "$host"); do
-                ip rule del to "$ip" table $TABLE 2>/dev/null
-            done
-        done
-        ip route flush table $TABLE
-        ;;
-    restart)
-        $0 stop
-        $0 start
-        ;;
-    *)
-        echo "Usage: $0 {start|stop|restart}"
-        exit 1
-        ;;
-esac
-#+end_src
-
-#+begin_src conf :tangle "/sudo::/etc/systemd/system/mail-routes.service"
-[Unit]
-Description=Add and remove static routes for mail servers
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/local/bin/mail_routes.sh start
-ExecStop=/usr/local/bin/mail_routes.sh stop
-
-[Install]
-WantedBy=multi-user.target
-#+end_src
 * Software
 ** Zathura
 
@@ -1088,10 +940,82 @@ set selection-clipboard clipboard
 #+end_src
 
 * Scripts 
+:properties:
+:header-args:bash: :tangle-mode (identity #o755) :shebang #!/bin/bash
+:end:
+** Route email traffic through a specific interface
+#+begin_src bash :tangle "~/.local/bin/vpn-bypass.sh" 
+DOMAINS=("pierre-antoine-comby.fr" "imap.ens-paris-saclay.fr" "smtp.ens-paris-saclay.fr")
 
+# 1. Detect the local gateway IP and the exact local Interface Devic
+# Looks for a default route line that does NOT contain VPN keywords
+GW_LINE=$(ip route | grep default | grep -v -E '(tun|ppp|fct|vpn|enp|lo)' | head -n 1)
+
+LOCAL_GW=$(echo "$GW_LINE" | awk '{print $3}')
+LOCAL_DEV=$(echo "$GW_LINE" | awk '{print $5}')
+
+if [ -z "$LOCAL_GW" ] || [ -z "$LOCAL_DEV" ]; then
+    echo "❌ Error: Could not detect your local gateway or interface network device."
+    exit 1
+fi
+
+echo "📌 Local gateway detected: $LOCAL_GW on device: $LOCAL_DEV"
+echo "----------------------------------------"
+
+# 2. Loop through each domain, resolve its IP, and add the strict bypass route
+for DOMAIN in "${DOMAINS[@]}"; do
+    echo "Resolving $DOMAIN..."
+    
+    IPS=$(dig +short "$DOMAIN" | grep -E '^[0-9.]+$')
+    
+    if [ -z "$IPS" ]; then
+        echo "⚠️  Warning: Could not resolve $DOMAIN"
+        continue
+    fi
+    
+    for IP in $IPS; do
+        echo "✈️  Routing $IP via $LOCAL_GW on $LOCAL_DEV (Bypassing VPN)..."
+        
+        # Force the rule to use the explicit local physical network device interface
+        sudo ip route add "$IP" via "$LOCAL_GW" dev "$LOCAL_DEV" 2>/dev/null
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ Successfully added route for $IP"
+        else
+            echo "ℹ️  Route for $IP already exists or failed to apply."
+        fi
+    done
+done
+echo "----------------------------------------"
+echo "🎉 Split tunneling strictly applied!"
+#+end_src
+#+begin_src bash :tangle "~/.local/bin/vpn-cleanup.sh"
+DOMAINS=("pierre-antoine-comby.fr" "imap.ens-paris-saclay.fr" "smtp.ens-paris-saclay.fr")
+
+echo "🧹 Cleaning up custom mail routes..."
+echo "----------------------------------------"
+
+for DOMAIN in "${DOMAINS[@]}"; do
+    # Get the IP addresses for the domain
+    IPS=$(dig +short "$DOMAIN" | grep -E '^[0-9.]+$')
+    
+    for IP in $IPS; do
+        # Check if the route exists before trying to delete it
+        if ip route show "$IP" >/dev/null 2>&1; then
+            echo "🗑️  Removing route for $IP ($DOMAIN)..."
+            sudo ip route del "$IP" 2>/dev/null
+        else
+            echo "ℹ️  No custom route found for $IP"
+        fi
+    done
+done
+
+echo "----------------------------------------"
+echo "✨ Routing table restored to normal!"
+#+end_src
 ** Rsync script for automatic synchronisation
 
-#+begin_src bash :tangle "~/.local/bin/autosync" :shebang #!/bin/bash
+#+begin_src bash :tangle "~/.local/bin/autosync"
 while inotifywait -r -e modify,create,delete,move $1
     do
         rsync -e ssh -rlptDhvz $1/ $2
@@ -1266,6 +1190,725 @@ https://gist.github.com/DocShotgun/a02a4c0c0a57e43ff4f038b46ca66ae0
   <<opencode-provider>>,
   <<opencode-mcp>>
 }
+#+end_src
+* Kitty Terminal
+:properties:
+:header-args:conf: :tangle "~/.config/kitty/kitty.conf"
+** Desktop file 
+#+begin_src conf  :tangle "~/.local/share/applications/kitty.desktop" :noweb yes
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=kitty
+GenericName=Terminal emulator
+Comment=Fast, feature-rich, GPU based terminal
+TryExec=kitty
+StartupNotify=true
+Exec=kitty
+Icon=<<eval-elisp("(getenv \"HOME\")")>>/.config/kitty/kitty.app.png
+Categories=System;TerminalEmulator;
+X-TerminalArgExec=--
+X-TerminalArgTitle=--title
+X-TerminalArgAppId=--class
+X-TerminalArgDir=--working-directory
+X-TerminalArgHold=--hold
+
+#+end_src
+For now this mostly the stock config, split in manageable chunk for Org mode.
+** Font Config
+#+begin_src conf
+font_family    family='Iosevka Nerd Font Mono' postscript_name=IosevkaNFM
+bold_font        auto
+italic_font      auto
+bold_italic_font auto
+font_size 11.0
+force_ltr no
+disable_ligatures never
+disable_ligatures_in tab cursor
+
+
+
+# modify_font
+# box_drawing_scale 0.001, 1, 1.5, 2
+# undercurl_style thin-sparse
+# underline_exclusion 1
+# text_composition_strategy platform
+# text_fg_override_threshold 0
+#+end_src
+**  Cursor
+#+begin_src conf
+
+# cursor #cccccc
+# cursor_text_color #111111
+# cursor_shape box
+# cursor_shape_unfocused hollow
+# cursor_beam_thickness 1.5
+# cursor_underline_thickness 2.0
+# cursor_blink_interval -1
+# cursor_stop_blinking_after 15.0
+
+cursor_trail 10
+
+# cursor_trail_decay 0.1 0.4
+# cursor_trail_start_threshold 2
+# cursor_trail_color none
+#+end_src
+** Scrolback
+#+begin_src conf
+scrollback_lines 20000
+# scrollbar scrolled
+# scrollbar_interactive yes
+# scrollbar_jump_on_click yes
+# scrollbar_width 0.5
+# scrollbar_hover_width 1
+# scrollbar_handle_opacity 0.5
+# scrollbar_radius 0.3
+# scrollbar_gap 0.1
+# scrollbar_min_handle_height 1
+# scrollbar_hitbox_expansion 0.25
+# scrollbar_track_opacity 0
+# scrollbar_track_hover_opacity 0.1
+# scrollbar_handle_color foreground
+# scrollbar_track_color foreground
+# scrollback_pager less --chop-long-lines --RAW-CONTROL-CHARS +INPUT_LINE_NUMBER
+# scrollback_pager_history_size 0
+# scrollback_fill_enlarged_window no
+# wheel_scroll_multiplier 5.0
+# wheel_scroll_min_lines 1
+# touch_scroll_multiplier 1.0
+#+end_src
+** Mouse
+#+begin_src conf
+# mouse_hide_wait 3.0
+
+# url_color #0087bd
+# url_style curly
+# open_url_with default
+
+# url_prefixes file ftp ftps gemini git gopher http https irc ircs kitty mailto news sftp ssh
+# detect_urls yes
+
+# url_excluded_characters
+
+
+# show_hyperlink_targets no
+
+# underline_hyperlinks hover
+
+
+copy_on_select clipboard
+
+clear_selection_on_clipboard_loss yes
+
+paste_actions quote-urls-at-prompt,confirm
+
+strip_trailing_spaces smart
+
+# select_by_word_characters @-./_~?&=%+#
+# select_by_word_characters_forward
+# click_interval -1.0
+# focus_follows_mouse no
+# pointer_shape_when_grabbed arrow
+# default_pointer_shape beam
+# pointer_shape_when_dragging beam crosshair
+#+end_src
+*** Mouse Actions
+#+begin_src conf
+
+
+# clear_all_mouse_actions no
+
+# mouse_map left click ungrabbed mouse_handle_click selection link prompt
+
+
+# mouse_map shift+left click grabbed,ungrabbed mouse_handle_click selection link prompt
+
+#: Click the link under the mouse cursor
+
+# mouse_map ctrl+shift+left release grabbed,ungrabbed mouse_handle_click link
+# mouse_map ctrl+shift+left press grabbed discard_event
+
+#: Paste from the primary selection
+# mouse_map middle release ungrabbed paste_from_selection
+
+#: Start selecting text
+
+# mouse_map left press ungrabbed mouse_selection normal
+
+#: Start selecting text in a rectangle
+# mouse_map ctrl+alt+left press ungrabbed mouse_selection rectangle
+#: Select a word
+# mouse_map left doublepress ungrabbed mouse_selection word
+#: Select a line
+# mouse_map left triplepress ungrabbed mouse_selection line
+#: Select line from point
+# mouse_map ctrl+alt+left triplepress ungrabbed mouse_selection line_from_point
+
+#: Extend the current selection
+
+# mouse_map right press ungrabbed mouse_selection extend
+
+
+#: Paste from the primary selection even when grabbed
+
+# mouse_map shift+middle release ungrabbed,grabbed paste_selection
+# mouse_map shift+middle press grabbed discard_event
+
+#: Start selecting text even when grabbed
+
+# mouse_map shift+left press ungrabbed,grabbed mouse_selection normal
+
+#: Start selecting text in a rectangle even when grabbed
+
+# mouse_map ctrl+shift+alt+left press ungrabbed,grabbed mouse_selection rectangle
+
+#: Select a word even when grabbed
+
+# mouse_map shift+left doublepress ungrabbed,grabbed mouse_selection word
+
+#: Select a line even when grabbed
+
+# mouse_map shift+left triplepress ungrabbed,grabbed mouse_selection line
+
+#: Select line from point even when grabbed
+
+# mouse_map ctrl+shift+alt+left triplepress ungrabbed,grabbed mouse_selection line_from_point
+
+#::  Select from the clicked point to the end of the line even when
+#::  grabbed. If you would like to select the word at the point and
+#::  then extend to the rest of the line, change `line_from_point` to
+#::  `word_and_line_from_point`.
+
+#: Extend the current selection even when grabbed
+
+# mouse_map shift+right press ungrabbed,grabbed mouse_selection extend
+
+#: Show clicked command output in pager
+
+# mouse_map ctrl+shift+right press ungrabbed mouse_show_command_output
+#+end_src
+** Performance Tuning
+#+begin_src conf
+
+# repaint_delay 10
+# input_delay 3
+
+# sync_to_monitor yes
+#+end_src
+** Terminal Bell
+#+begin_src conf
+enable_audio_bell no
+visual_bell_duration 1.0
+# visual_bell_color none
+
+#: The color used by visual bell. Set to none will fall back to
+#: selection background color. If you feel that the visual bell is too
+#: bright, you can set it to a darker color.
+
+window_alert_on_bell yes
+bell_on_tab "🔔 "
+
+
+# command_on_bell none
+# bell_path none
+# linux_bell_theme __custom
+
+#+end_src
+** Window layout
+#+begin_src conf
+
+# remember_window_size  yes
+# initial_window_width  640
+# initial_window_height 400
+# remember_window_position no
+# enabled_layouts *
+# window_resize_step_cells 2
+# window_resize_step_lines 2
+# window_border_width 0.5pt
+# draw_minimal_borders yes
+# draw_window_borders_for_single_window no
+# window_margin_width 0
+# single_window_margin_width -1
+# window_padding_width 0
+# single_window_padding_width -1
+# placement_strategy center
+# active_border_color #00ff00
+# inactive_border_color #cccccc
+# bell_border_color #ff5a00
+# inactive_text_alpha 1.0
+# hide_window_decorations no
+# window_logo_path none
+# window_logo_position bottom-right
+# window_logo_alpha 0.5
+# window_logo_scale 0
+# resize_debounce_time 0.1 0.5
+# resize_in_steps no
+# visual_window_select_characters 1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ
+# confirm_os_window_close -1
+
+#+end_src
+** Tab Bar
+#+begin_src conf
+# tab_bar_edge bottom
+# tab_bar_margin_width 0.0
+# tab_bar_margin_height 0.0 0.0
+# tab_bar_style fade
+# tab_bar_filter
+# tab_bar_align left
+# tab_bar_min_tabs 2
+# tab_switch_strategy previous
+# tab_fade 0.25 0.5 0.75 1
+# tab_separator " ┇"
+# tab_powerline_style angled
+# tab_activity_symbol none
+# tab_title_max_length 0
+# tab_title_template "{fmt.fg.red}{bell_symbol}{activity_symbol}{fmt.fg.tab}{tab.last_focused_progress_percent}{title}"
+
+# active_tab_title_template none
+# active_tab_foreground   #000
+# active_tab_background   #eee
+# active_tab_font_style   bold-italic
+# inactive_tab_foreground #444
+# inactive_tab_background #999
+# inactive_tab_font_style normal
+
+# tab_bar_background none
+# tab_bar_margin_color none
+
+#+end_src
+** Color Scheme
+#+begin_src conf
+
+# foreground #dddddd
+# background #000000
+
+# background_opacity 1.0
+
+# background_blur 0
+
+# transparent_background_colors
+# dynamic_background_opacity no
+
+# background_image none
+
+# background_image_layout tiled
+# background_image_linear no
+# background_tint 0.0
+# background_tint_gaps 1.0
+# dim_opacity 0.4
+# selection_foreground #000000
+# selection_background #fffacd
+#+end_src
+*** Colortable
+#+begin_src conf
+
+# color0 #000000
+# color8 #767676
+#: black
+# color1 #cc0403
+# color9 #f2201f
+#: red
+# color2  #19cb00
+# color10 #23fd00
+#: green
+# color3  #cecb00
+# color11 #fffd00
+#: yellow
+# color4  #0d73cc
+# color12 #1a8fff
+#: blue
+# color5  #cb1ed1
+# color13 #fd28ff
+#: magenta
+# color6  #0dcdcd
+# color14 #14ffff
+#: cyan
+# color7  #dddddd
+# color15 #ffffff
+#: white
+# mark1_foreground black
+#: Color for marks of type 1
+# mark1_background #98d3cb
+#: Color for marks of type 1 (light steel blue)
+# mark2_foreground black
+#: Color for marks of type 2
+# mark2_background #f2dcd3
+#: Color for marks of type 1 (beige)
+# mark3_foreground black
+#: Color for marks of type 3
+# mark3_background #f274bc
+#: Color for marks of type 3 (violet)
+#+end_src
+** Advanced 
+#+begin_src conf
+
+# shell .
+# editor .
+
+# close_on_child_death no
+
+
+# remote_control_password
+
+
+# allow_remote_control no
+# listen_on none
+# env
+# filter_notification
+# watcher
+# exe_search_path
+# update_check_interval 24
+# startup_session none
+# clipboard_control write-clipboard write-primary read-clipboard-ask read-primary-ask
+# clipboard_max_size 512
+# file_transfer_confirmation_bypass
+# allow_hyperlinks yes
+shell_integration enabled
+#: <https://sw.kovidgoyal.net/kitty/shell-integration/> for details.
+
+# allow_cloning ask
+
+# clone_source_strategies venv,conda,env_var,path
+
+notify_on_cmd_finish unfocused
+
+# term xterm-kitty
+# terminfo_type path
+# forward_stdio no
+
+
+# menu_map
+#+end_src
+** OS Tweak
+#+begin_src conf
+
+# wayland_titlebar_color system
+# linux_display_server auto
+# wayland_enable_ime yes
+#+end_src
+** Keyboard Shortcut
+#+begin_src conf
+
+# kitty_mod ctrl+shift
+
+# clear_all_shortcuts no
+# action_alias
+
+#: E.g. action_alias launch_tab launch --type=tab --cwd=current
+
+#:     map f1 launch_tab vim
+#:     map f2 launch_tab emacs
+# kitten_alias
+#+end_src
+*** Clipboard
+#+begin_src conf
+# map kitty_mod+c copy_to_clipboard
+
+# map cmd+c copy_or_noop
+
+# map kitty_mod+v paste_from_clipboard
+# map cmd+v       paste_from_clipboard
+
+#: Paste from selection
+
+# map kitty_mod+s  paste_from_selection
+# map shift+insert paste_from_selection
+
+#: Pass selection to program
+
+# map kitty_mod+o pass_selection_to_program
+#+end_src
+*** Scrolling
+#+begin_src conf
+#: Scroll line up
+
+# map kitty_mod+up    scroll_line_up
+# map kitty_mod+k     scroll_line_up
+# map opt+cmd+page_up scroll_line_up
+# map cmd+up          scroll_line_up
+
+#: Scroll line down
+
+# map kitty_mod+down    scroll_line_down
+# map kitty_mod+j       scroll_line_down
+# map opt+cmd+page_down scroll_line_down
+# map cmd+down          scroll_line_down
+
+#: Scroll page up
+
+# map kitty_mod+page_up scroll_page_up
+# map cmd+page_up       scroll_page_up
+
+#: Scroll page down
+
+# map kitty_mod+page_down scroll_page_down
+# map cmd+page_down       scroll_page_down
+
+#: Scroll to top
+
+# map kitty_mod+home scroll_home
+# map cmd+home       scroll_home
+
+#: Scroll to bottom
+
+# map kitty_mod+end scroll_end
+# map cmd+end       scroll_end
+
+#: Scroll to previous shell prompt
+
+# map kitty_mod+z scroll_to_prompt -1
+#: Scroll to next shell prompt
+
+# map kitty_mod+x scroll_to_prompt 1
+
+#: Browse scrollback buffer in pager
+
+# map kitty_mod+h show_scrollback
+
+
+#: Browse output of the last shell command in pager
+
+# map kitty_mod+g show_last_command_output
+
+
+#: Search the scrollback within a pager
+
+# map kitty_mod+/ search_scrollback
+# map cmd+f       search_scrollback
+
+#+end_src
+*** Window management
+#+begin_src conf
+#: New window
+# map kitty_mod+enter new_window
+# map cmd+enter       new_window
+#: New OS window
+# map kitty_mod+n new_os_window
+# map cmd+n       new_os_window
+#: Close window
+# map kitty_mod+w close_window
+# map shift+cmd+d close_window
+#: Next window
+# map kitty_mod+] next_window
+#: Previous window
+# map kitty_mod+[ previous_window
+#: Move window forward
+# map kitty_mod+f move_window_forward
+#: Move window backward
+# map kitty_mod+b move_window_backward
+#: Move window to top
+# map kitty_mod+` move_window_to_top
+#: Start resizing window
+# map kitty_mod+r start_resizing_window
+# map cmd+r       start_resizing_window
+#: First window
+# map kitty_mod+1 first_window
+# map cmd+1       first_window
+#: Second window
+# map kitty_mod+2 second_window
+# map cmd+2       second_window
+#: Third window
+# map kitty_mod+3 third_window
+# map cmd+3       third_window
+#: Fourth window
+# map kitty_mod+4 fourth_window
+# map cmd+4       fourth_window
+#: Fifth window
+# map kitty_mod+5 fifth_window
+# map cmd+5       fifth_window
+#: Sixth window
+# map kitty_mod+6 sixth_window
+# map cmd+6       sixth_window
+#: Seventh window
+# map kitty_mod+7 seventh_window
+# map cmd+7       seventh_window
+#: Eighth window
+# map kitty_mod+8 eighth_window
+# map cmd+8       eighth_window
+#: Ninth window
+# map kitty_mod+9 ninth_window
+# map cmd+9       ninth_window
+#: Tenth window
+# map kitty_mod+0 tenth_window
+#: Visually select and focus window
+# map kitty_mod+f7 focus_visible_window
+#: Visually swap window with another
+# map kitty_mod+f8 swap_with_window
+#+end_src
+*** Tab management
+#+begin_src conf
+#: Next tab
+# map kitty_mod+right next_tab
+# map shift+cmd+]     next_tab
+# map ctrl+tab        next_tab
+#: Previous tab
+# map kitty_mod+left previous_tab
+# map shift+cmd+[    previous_tab
+# map ctrl+shift+tab previous_tab
+#: New tab
+# map kitty_mod+t new_tab
+# map cmd+t       new_tab
+#: Close tab
+# map kitty_mod+q close_tab
+# map cmd+w       close_tab
+#: Close OS window
+# map shift+cmd+w close_os_window
+#: Move tab forward
+# map kitty_mod+. move_tab_forward
+#: Move tab backward
+# map kitty_mod+, move_tab_backward
+#: Set tab title
+# map kitty_mod+alt+t set_tab_title
+# map shift+cmd+i     set_tab_title
+#: You can also create shortcuts to go to specific tabs, with 1 being
+#: the first tab, 2 the second tab and -1 being the previously active
+#: tab, -2 being the tab active before the previously active tab and
+#: so on. Any number larger than the number of tabs goes to the last
+#: tab and any number less than the number of previously used tabs in
+#: the history goes to the oldest previously used tab in the history::
+#:     map ctrl+alt+1 goto_tab 1
+#:     map ctrl+alt+2 goto_tab 2
+#: Just as with new_window above, you can also pass the name of
+#: arbitrary commands to run when using new_tab and new_tab_with_cwd.
+#: Finally, if you want the new tab to open next to the current tab
+#: rather than at the end of the tabs list, use::
+#:     map ctrl+t new_tab !neighbor [optional cmd to run]
+#: }}}
+#+end_src
+*** Layout Management
+#+begin_src conf
+
+#: Next layout
+# map kitty_mod+l next_layout
+#: You can also create shortcuts to switch to specific layouts::
+#:     map ctrl+alt+t goto_layout tall
+#:     map ctrl+alt+s goto_layout stack
+#: Similarly, to switch back to the previous layout::
+#:     map ctrl+alt+p last_used_layout
+#: There is also a toggle_layout action that switches to the named
+#: layout or back to the previous layout if in the named layout.
+#: Useful to temporarily "zoom" the active window by switching to the
+#: stack layout::
+#:     map ctrl+alt+z toggle_layout stack
+#+end_src
+*** Fontsize 
+#+begin_src conf
+#: You can change the font size for all top-level kitty OS windows at
+#: a time or only the current one.
+#: Increase font size
+# map kitty_mod+equal  change_font_size all +2.0
+# map kitty_mod+plus   change_font_size all +2.0
+# map kitty_mod+kp_add change_font_size all +2.0
+# map cmd+plus         change_font_size all +2.0
+# map cmd+equal        change_font_size all +2.0
+# map shift+cmd+equal  change_font_size all +2.0
+#: Decrease font size
+# map kitty_mod+minus       change_font_size all -2.0
+# map kitty_mod+kp_subtract change_font_size all -2.0
+# map cmd+minus             change_font_size all -2.0
+# map shift+cmd+minus       change_font_size all -2.0
+#: Reset font size
+# map kitty_mod+backspace change_font_size all 0
+# map cmd+0               change_font_size all 0
+#: To setup shortcuts for specific font sizes::
+#:     map kitty_mod+f6 change_font_size all 10.0
+#: To setup shortcuts to change only the current OS window's font
+#: size::
+#:     map kitty_mod+f6 change_font_size current 10.0
+#: To setup shortcuts to multiply/divide the font size::
+#:     map kitty_mod+f6 change_font_size all *2.0
+#:     map kitty_mod+f6 change_font_size all /2.0
+#+end_src
+*** Select and act on visible taext
+#+begin_src conf
+
+#: Use the hints kitten to select text and either pass it to an
+#: external program or insert it into the terminal or copy it to the
+#: clipboard.
+#: Open URL
+# map kitty_mod+e open_url_with_hints
+#: Insert selected path
+# map kitty_mod+p>f kitten hints --type path --program -
+#: Open selected path
+# map kitty_mod+p>shift+f kitten hints --type path
+#: Insert chosen file
+# map kitty_mod+p>c kitten choose-files
+#: Insert chosen directory
+# map kitty_mod+p>d kitten choose-files --mode=dir
+#: Insert selected line
+# map kitty_mod+p>l kitten hints --type line --program -
+#: Insert selected word
+# map kitty_mod+p>w kitten hints --type word --program -
+#: Insert selected hash
+# map kitty_mod+p>h kitten hints --type hash --program -
+#: Open the selected file at the selected line
+# map kitty_mod+p>n kitten hints --type linenum
+#: Open the selected hyperlink
+# map kitty_mod+p>y kitten hints --type hyperlink
+#: The hints kitten has many more modes of operation that you can map
+#: to different shortcuts. For a full description see hints kitten
+#: <https://sw.kovidgoyal.net/kitty/kittens/hints/>.
+#: }}}
+#+end_src
+*** Misc
+#+begin_src conf
+#: Show documentation
+# map kitty_mod+f1 show_kitty_doc overview
+#: Toggle fullscreen
+# map kitty_mod+f11 toggle_fullscreen
+# map ctrl+cmd+f    toggle_fullscreen
+#: Toggle maximized
+# map kitty_mod+f10 toggle_maximized
+#: Toggle macOS secure keyboard entry
+# map opt+cmd+s toggle_macos_secure_keyboard_entry
+#: macOS Cycle through OS Windows
+# map cmd+` macos_cycle_through_os_windows
+#: macOS Cycle through OS Windows backwards
+# map cmd+shift+` macos_cycle_through_os_windows_backwards
+#: Unicode input
+# map kitty_mod+u    kitten unicode_input
+# map ctrl+cmd+space kitten unicode_input
+#: Edit config file
+# map kitty_mod+f2 edit_config_file
+# map cmd+,        edit_config_file
+#: Open the kitty command shell
+# map kitty_mod+escape kitty_shell window
+#: Increase background opacity
+# map kitty_mod+a>m set_background_opacity +0.1
+#: Decrease background opacity
+# map kitty_mod+a>l set_background_opacity -0.1
+#: Make background fully opaque
+# map kitty_mod+a>1 set_background_opacity 1
+#: Reset background opacity
+# map kitty_mod+a>d set_background_opacity default
+#: Reset the terminal
+# map kitty_mod+delete clear_terminal reset active
+# map opt+cmd+r        clear_terminal reset active
+#: Clear to start
+# map cmd+k clear_terminal to_cursor active
+#: Clear scrollback
+# map option+cmd+k clear_terminal scrollback active
+#: Clear the last command
+# map cmd+l clear_terminal last_command active
+#: Clear screen
+# map cmd+ctrl+l clear_terminal to_cursor_scroll active
+#: Reload kitty.conf
+# map kitty_mod+f5 load_config_file
+# map ctrl+cmd+,   load_config_file
+#: Debug kitty configuration
+# map kitty_mod+f6 debug_config
+# map opt+cmd+,    debug_config
+#: Send arbitrary text on key presses
+#: Open kitty Website
+# map shift+cmd+/ open_url https://sw.kovidgoyal.net/kitty/
+#: Hide macOS kitty application
+# map cmd+h hide_macos_app
+#: Hide macOS other applications
+# map opt+cmd+h hide_macos_other_apps
+#: Minimize macOS window
+# map cmd+m minimize_macos_window
+#: Quit kitty
+# map cmd+q quit
 #+end_src
 * Hyprland [0/5] :noexport:
 :properties:
@@ -1679,8 +2322,6 @@ killall -SIGUSR2 waybar
     },
 }
 #+end_src
-
-* Gritterd / Regrit :noexport:
 
 * Local Variables 
 # Local Variables:
